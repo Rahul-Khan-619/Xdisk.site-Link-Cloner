@@ -170,12 +170,12 @@
                 return;
             }
 
-            showMessage(`Found ${matches.length} link(s). Processing sequentially...`, 'info');
+            showMessage(`Found ${matches.length} link(s). Processing sequentially to avoid errors...`, 'info');
             
             let successCount = 0;
             let currentText = inputText;
 
-            // --- Process links one by one to avoid potential rate limiting ---
+            // --- Process links one by one to avoid rate limiting on the proxy ---
             for (const [index, match] of matches.entries()) {
                 const originalUrl = match[0];
                 const fileCode = match[1];
@@ -183,15 +183,17 @@
                 // Update UI with progress
                 showMessage(`Processing link ${index + 1} of ${matches.length}: ${fileCode}`, 'info');
 
-                // This makes a direct request to the API. This will only work if the
-                // xdisk.site server has correctly configured its CORS policy to allow
-                // requests from other websites.
-                const apiUrl = `https://xdisk.site/api/file/clone?file_code=${fileCode}&key=${apiKey}`;
+                const originalApiUrl = `https://xdisk.site/api/file/clone?file_code=${fileCode}&key=${apiKey}`;
+                // A proxy is necessary to bypass browser CORS security restrictions.
+                // The "Failed to fetch" error occurs when too many requests are sent at once.
+                // This version processes links one-by-one with a delay to fix that.
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const apiUrl = `${proxyUrl}${encodeURIComponent(originalApiUrl)}`;
 
                 try {
                     const response = await fetch(apiUrl);
                     if (!response.ok) {
-                        throw new Error(`API returned status ${response.status}`);
+                        throw new Error(`Proxy/API returned status ${response.status}`);
                     }
                     const data = await response.json();
                     if (data.status === 200 && data.result && data.result.url) {
@@ -203,7 +205,7 @@
                     }
                 } catch (error) {
                     console.error(`Failed to clone ${originalUrl}:`, error.message);
-                    // Mark the failed link in the text. A "Failed to fetch" error here usually indicates a CORS issue.
+                    // Mark the failed link in the text
                     const failureText = `${originalUrl} [CLONING FAILED: ${error.message}]`;
                     currentText = currentText.replaceAll(originalUrl, failureText);
                 }
@@ -211,7 +213,7 @@
                 // Update the result textarea in real-time so the user sees progress
                 resultTextarea.value = currentText;
 
-                // Pause before the next request to be polite to the API server
+                // Pause before the next request to avoid overwhelming the proxy service
                 if (index < matches.length - 1) {
                     await sleep(500); // 0.5 second delay between requests
                 }
