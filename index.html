@@ -117,8 +117,6 @@
                     typeClasses = 'bg-yellow-900 text-yellow-300';
                     break;
             }
-            // FIX: The classList.add method does not accept a string with spaces.
-            // We need to split the string into individual classes and add them.
             if (typeClasses) {
                  messageArea.classList.add(...typeClasses.split(' '));
             }
@@ -140,6 +138,12 @@
         }
 
         /**
+         * A utility function to pause execution for a given time.
+         * @param {number} ms - The number of milliseconds to sleep.
+         */
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        /**
          * Main function to handle the link conversion process.
          */
         async function handleConversion() {
@@ -153,7 +157,6 @@
             }
 
             setLoading(true);
-            showMessage('Processing... looking for links.', 'info');
             resultTextarea.value = ''; // Clear previous results
 
             // --- Find all xdisk.site links using regex ---
@@ -167,58 +170,55 @@
                 return;
             }
 
-            showMessage(`Found ${matches.length} link(s). Cloning now...`, 'info');
+            showMessage(`Found ${matches.length} link(s). Processing sequentially to avoid errors...`, 'info');
+            
+            let successCount = 0;
+            let currentText = inputText;
 
-            // --- Create an array of promises for each API call ---
-            const clonePromises = matches.map(match => {
+            // --- Process links one by one to avoid rate limiting on the proxy ---
+            for (const [index, match] of matches.entries()) {
                 const originalUrl = match[0];
                 const fileCode = match[1];
-                
+
+                // Update UI with progress
+                showMessage(`Processing link ${index + 1} of ${matches.length}: ${fileCode}`, 'info');
+
                 const originalApiUrl = `https://xdisk.site/api/file/clone?file_code=${fileCode}&key=${apiKey}`;
-                // FIX: The "Failed to fetch" error is a CORS (Cross-Origin Resource Sharing) issue.
-                // The browser blocks requests to APIs on different domains unless the API server explicitly allows it.
-                // We use a public CORS proxy to bypass this browser security feature.
+                // A proxy is necessary to bypass browser CORS security restrictions.
+                // The "Failed to fetch" error occurs when too many requests are sent at once.
+                // This version processes links one-by-one with a delay to fix that.
                 const proxyUrl = 'https://api.allorigins.win/raw?url=';
                 const apiUrl = `${proxyUrl}${encodeURIComponent(originalApiUrl)}`;
 
-                return fetch(apiUrl)
-                    .then(response => {
-                        if (!response.ok) {
-                            // Handle HTTP errors like 404, 500, etc.
-                            throw new Error(`API returned status ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data.status === 200 && data.result && data.result.url) {
-                            return { originalUrl, newUrl: data.result.url };
-                        } else {
-                            // Handle API-specific errors (e.g., invalid key, file not found)
-                            throw new Error(data.msg || 'Unknown API error');
-                        }
-                    })
-                    .catch(error => {
-                        console.error(`Failed to clone ${originalUrl}:`, error.message);
-                        // If a single link fails, mark it in the output instead of failing all
-                        return { originalUrl, newUrl: `${originalUrl} [CLONING FAILED: ${error.message}]` };
-                    });
-            });
-
-            // --- Wait for all API calls to complete ---
-            const results = await Promise.all(clonePromises);
-
-            // --- Replace original links with new cloned links ---
-            let convertedText = inputText;
-            let successCount = 0;
-            results.forEach(({ originalUrl, newUrl }) => {
-                // Use replaceAll to handle cases where the same link appears multiple times
-                convertedText = convertedText.replaceAll(originalUrl, newUrl);
-                if (!newUrl.includes('[CLONING FAILED')) {
-                    successCount++;
+                try {
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) {
+                        throw new Error(`Proxy/API returned status ${response.status}`);
+                    }
+                    const data = await response.json();
+                    if (data.status === 200 && data.result && data.result.url) {
+                        // Replace immediately to handle duplicate links correctly
+                        currentText = currentText.replaceAll(originalUrl, data.result.url);
+                        successCount++;
+                    } else {
+                        throw new Error(data.msg || 'Unknown API error');
+                    }
+                } catch (error) {
+                    console.error(`Failed to clone ${originalUrl}:`, error.message);
+                    // Mark the failed link in the text
+                    const failureText = `${originalUrl} [CLONING FAILED: ${error.message}]`;
+                    currentText = currentText.replaceAll(originalUrl, failureText);
                 }
-            });
+                
+                // Update the result textarea in real-time so the user sees progress
+                resultTextarea.value = currentText;
 
-            resultTextarea.value = convertedText;
+                // Pause before the next request to avoid overwhelming the proxy service
+                if (index < matches.length - 1) {
+                    await sleep(500); // 0.5 second delay between requests
+                }
+            }
+
             showMessage(`Conversion complete! Successfully cloned ${successCount} of ${matches.length} links.`, 'success');
             setLoading(false);
         }
