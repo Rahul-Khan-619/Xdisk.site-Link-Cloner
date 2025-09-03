@@ -44,8 +44,8 @@
     <main class="w-full max-w-3xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
         <!-- Header Section -->
         <div class="text-center">
-            <h1 id="main-title" class="text-3xl font-bold text-white">XDisk Link Cloner</h1>
-            <p class="text-gray-400 mt-2">Paste your text below, enter your API key, and process all links instantly.</p>
+            <h1 class="text-3xl font-bold text-white">XDisk Link Cloner</h1>
+            <p class="text-gray-400 mt-2">Paste your text below, enter your API key, and convert all links instantly.</p>
         </div>
 
         <!-- API Key Input -->
@@ -60,16 +60,6 @@
             <textarea id="inputText" rows="8" placeholder="Hello, here are my links: https://xdisk.site/r9o25tfq82ru and https://xdisk.site/r9o2fsts286ru. Please clone them." class="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200 outline-none resize-y"></textarea>
         </div>
 
-        <!-- Mode Toggle Switch -->
-        <div class="flex items-center justify-center space-x-3 text-gray-400 py-2">
-            <span>Clone Links</span>
-            <label for="modeToggle" class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="modeToggle" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-            <span>Get Direct Links</span>
-        </div>
-
         <!-- Convert Button -->
         <button id="convertBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-blue-800 disabled:cursor-not-allowed disabled:transform-none">
             <span id="btn-text">Convert Links</span>
@@ -82,7 +72,7 @@
         <!-- Result Text Area -->
         <div class="space-y-2">
             <div class="flex justify-between items-center">
-                <label for="resultText" class="text-sm font-medium text-gray-300">Result</label>
+                <label for="resultText" class="text-sm font-medium text-gray-300">Converted Text</label>
                 <button id="copyBtn" class="bg-gray-600 hover:bg-gray-500 text-white text-xs font-semibold py-1 px-3 rounded-md transition duration-200">
                     Copy
                 </button>
@@ -101,37 +91,10 @@
         const messageArea = document.getElementById('messageArea');
         const btnText = document.getElementById('btn-text');
         const btnSpinner = document.getElementById('btn-spinner');
-        const modeToggle = document.getElementById('modeToggle');
-        const mainTitle = document.getElementById('main-title');
 
         // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // Load API key from local storage for persistence
-            const savedApiKey = localStorage.getItem('xdiskApiKey');
-            if (savedApiKey) {
-                apiKeyInput.value = savedApiKey;
-            }
-            // Set initial UI state based on toggle
-            updateUIMode();
-        });
-
-        convertBtn.addEventListener('click', processLinks);
+        convertBtn.addEventListener('click', handleConversion);
         copyBtn.addEventListener('click', copyToClipboard);
-        modeToggle.addEventListener('change', updateUIMode);
-
-        /**
-         * Updates the UI text and placeholders based on the toggle switch state.
-         */
-        function updateUIMode() {
-            const isDirectLinkMode = modeToggle.checked;
-            if (isDirectLinkMode) { // Direct Link Mode
-                mainTitle.textContent = 'XDisk Direct Link Generator';
-                btnText.textContent = 'Get Direct Links';
-            } else { // Clone Mode
-                mainTitle.textContent = 'XDisk Link Cloner';
-                btnText.textContent = 'Convert Links';
-            }
-        }
 
         /**
          * Displays a status message to the user.
@@ -154,6 +117,8 @@
                     typeClasses = 'bg-yellow-900 text-yellow-300';
                     break;
             }
+            // FIX: The classList.add method does not accept a string with spaces.
+            // We need to split the string into individual classes and add them.
             if (typeClasses) {
                  messageArea.classList.add(...typeClasses.split(' '));
             }
@@ -166,19 +131,18 @@
         function setLoading(isLoading) {
             convertBtn.disabled = isLoading;
             if (isLoading) {
-                const isDirectLinkMode = modeToggle.checked;
-                btnText.textContent = isDirectLinkMode ? 'Getting Links...' : 'Converting...';
+                btnText.textContent = 'Converting...';
                 btnSpinner.classList.remove('hidden');
             } else {
-                updateUIMode(); // Resets button text to the correct mode
+                btnText.textContent = 'Convert Links';
                 btnSpinner.classList.add('hidden');
             }
         }
 
         /**
-         * Main function to handle the link processing based on the selected mode.
+         * Main function to handle the link conversion process.
          */
-        async function processLinks() {
+        async function handleConversion() {
             const inputText = inputTextarea.value;
             const apiKey = apiKeyInput.value.trim();
 
@@ -187,20 +151,10 @@
                 showMessage('Please provide input text and your API key.', 'error');
                 return;
             }
-            
-            // Save API key to local storage for persistence
-            localStorage.setItem('xdiskApiKey', apiKey);
 
             setLoading(true);
+            showMessage('Processing... looking for links.', 'info');
             resultTextarea.value = ''; // Clear previous results
-
-            // Determine mode and set API specifics
-            const isDirectLinkMode = modeToggle.checked;
-            const actionVerb = isDirectLinkMode ? 'generating direct links' : 'cloning';
-            const actionPastTense = isDirectLinkMode ? 'generated' : 'cloned';
-            const apiEndpoint = isDirectLinkMode ? 'file/direct_link' : 'file/clone';
-            const failureMessage = isDirectLinkMode ? 'DIRECT LINK FAILED' : 'CLONING FAILED';
-
 
             // --- Find all xdisk.site links using regex ---
             const linkRegex = /https:\/\/xdisk\.site\/([a-zA-Z0-9]+)/g;
@@ -213,20 +167,24 @@
                 return;
             }
 
-            showMessage(`Found ${matches.length} link(s). Now ${actionVerb}...`, 'info');
+            showMessage(`Found ${matches.length} link(s). Cloning now...`, 'info');
 
             // --- Create an array of promises for each API call ---
             const clonePromises = matches.map(match => {
                 const originalUrl = match[0];
                 const fileCode = match[1];
                 
-                const originalApiUrl = `https://xdisk.site/api/${apiEndpoint}?file_code=${fileCode}&key=${apiKey}`;
+                const originalApiUrl = `https://xdisk.site/api/file/clone?file_code=${fileCode}&key=${apiKey}`;
+                // FIX: The "Failed to fetch" error is a CORS (Cross-Origin Resource Sharing) issue.
+                // The browser blocks requests to APIs on different domains unless the API server explicitly allows it.
+                // We use a public CORS proxy to bypass this browser security feature.
                 const proxyUrl = 'https://api.allorigins.win/raw?url=';
                 const apiUrl = `${proxyUrl}${encodeURIComponent(originalApiUrl)}`;
 
                 return fetch(apiUrl)
                     .then(response => {
                         if (!response.ok) {
+                            // Handle HTTP errors like 404, 500, etc.
                             throw new Error(`API returned status ${response.status}`);
                         }
                         return response.json();
@@ -235,12 +193,14 @@
                         if (data.status === 200 && data.result && data.result.url) {
                             return { originalUrl, newUrl: data.result.url };
                         } else {
+                            // Handle API-specific errors (e.g., invalid key, file not found)
                             throw new Error(data.msg || 'Unknown API error');
                         }
                     })
                     .catch(error => {
-                        console.error(`Failed to process ${originalUrl}:`, error.message);
-                        return { originalUrl, newUrl: `${originalUrl} [${failureMessage}: ${error.message}]` };
+                        console.error(`Failed to clone ${originalUrl}:`, error.message);
+                        // If a single link fails, mark it in the output instead of failing all
+                        return { originalUrl, newUrl: `${originalUrl} [CLONING FAILED: ${error.message}]` };
                     });
             });
 
@@ -251,14 +211,15 @@
             let convertedText = inputText;
             let successCount = 0;
             results.forEach(({ originalUrl, newUrl }) => {
+                // Use replaceAll to handle cases where the same link appears multiple times
                 convertedText = convertedText.replaceAll(originalUrl, newUrl);
-                if (!newUrl.includes(failureMessage)) {
+                if (!newUrl.includes('[CLONING FAILED')) {
                     successCount++;
                 }
             });
 
             resultTextarea.value = convertedText;
-            showMessage(`Complete! Successfully ${actionPastTense} ${successCount} of ${matches.length} links.`, 'success');
+            showMessage(`Conversion complete! Successfully cloned ${successCount} of ${matches.length} links.`, 'success');
             setLoading(false);
         }
 
@@ -267,13 +228,15 @@
          */
         function copyToClipboard() {
             if (!resultTextarea.value) {
+                // Temporarily change button to show feedback
                 copyBtn.textContent = 'Nothing to Copy';
                 setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
                 return;
             };
 
+            // Use execCommand for better compatibility in sandboxed environments
             resultTextarea.select();
-            resultTextarea.setSelectionRange(0, 99999);
+            resultTextarea.setSelectionRange(0, 99999); // For mobile devices
 
             try {
                 document.execCommand('copy');
